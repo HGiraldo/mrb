@@ -1,0 +1,159 @@
+<?php
+
+/**
+ * @file
+ * Módulo que me crea el homepage para poderlo configurar como página inicial del sitio.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function datia_homepage_menu() {
+  $items = array();
+  $items['datia_homepage'] = array(
+    'title' => 'Monetisoft',
+    'page callback' => 'datia_homepage_page',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['ms403'] = array(
+    'title' => 'Access denied',
+    'page callback' => 'datia_403_page',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['ms404'] = array(
+    'title' => 'Page not found',
+    'page callback' => 'datia_404_page',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Page Callback.
+ */
+function datia_homepage_page() {
+  return '';
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function datia_homepage_uninstall() {
+  variable_del('site_frontpage');
+  variable_del('site_403');
+  variable_del('site_404');
+}
+
+/**
+ * Page callback()
+ */
+function datia_403_page() {
+  $content = array(
+    '#prefix' => '<div class="error-403 access-denied">',
+    '#suffix' => '</div>',
+  );
+  $content['logo'] = array(
+    '#prefix' => '<div class="logo">',
+    '#suffix' => '</div>',
+    '#markup' => l(theme('image', array('path' => theme_get_setting('logo'), 'title' => t('Monetisoft'), 'alt' => t('Monetisoft'))), '<front>', array('html' => TRUE)),
+  );
+  $content['content'] = array(
+    '#prefix' => '<div class="content">',
+    '#suffix' => '</div>',
+  );
+  $content['content']['text'] = array(
+    '#prefix' => '<div class="text">',
+    '#suffix' => '</div>',
+    '#markup' => '<h2>403</h2>' . '<p>' . t('!Oops, access denied¡') . '</p>',
+  );
+  $content['content']['text2'] = array(
+    '#prefix' => '<div class="text2">',
+    '#suffix' => '</div>',
+    'form' => drupal_get_form('datia_homepage_search'),
+  );
+  return $content;
+}
+
+/**
+ * Page callback()
+ */
+function datia_404_page() {
+  $content = array(
+    '#prefix' => '<div class="error-404 access-denied">',
+    '#suffix' => '</div>',
+  );
+  $content['logo'] = array(
+    '#prefix' => '<div class="logo">',
+    '#suffix' => '</div>',
+    '#markup' => l(theme('image', array('path' => theme_get_setting('logo'), 'title' => t('Monetisoft'), 'alt' => t('Monetisoft'))), '<front>', array('html' => TRUE)),
+  );
+  $content['content'] = array(
+    '#prefix' => '<div class="content">',
+    '#suffix' => '</div>',
+  );
+  $content['content']['text'] = array(
+    '#prefix' => '<div class="text">',
+    '#suffix' => '</div>',
+    '#markup' => '<h2>404</h2>' . '<p>' . t('!Oops, the page you requested does not exist.¡') . '</p>',
+  );
+  $content['content']['text2'] = array(
+    '#prefix' => '<div class="text2">',
+    '#suffix' => '</div>',
+    'form' => drupal_get_form('datia_homepage_search'),
+  );
+  return $content;
+}
+
+/**
+ * Implements form().
+ */
+function datia_homepage_search($form, &$form_state) {
+  $form['text'] = array(
+    '#prefix' => '<div class="textform">',
+    '#suffix' => '</div>',
+    '#markup' => t('You can go on !top or make a new search here:', array('!top' => l(t('Home'), '<front>'))),
+  );
+  $form['search'] = array(
+    '#type' => 'textfield',
+    '#attributes' => array(
+      'placeholder' => t('Search'),
+    ),
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Search'),
+    '#submit' => array(
+      'datia_homepage_search_submit'
+    ),
+    '#validate' => array(
+      'datia_homepage_search_validate'
+    ),
+  );
+  return $form;
+}
+
+/**
+ * Submit Callback().
+ */
+function datia_homepage_search_submit($form, &$form_state) {
+  $form_state['redirect'] = 'search/site/' . $form_state['values']['search'];
+}
+
+/**
+ * Validate Callback().
+ */
+function datia_homepage_search_validate($form, &$form_state) {
+  $form_state['redirect'] = 'search/site/' . $form_state['values']['search'];
+}
+
+/**
+ * hook_context_load_alter().
+ */
+function datia_homepage_context_load_alter(&$context) {
+  if (!drupal_valid_path($_GET['q']) || $_GET['q'] == 'ms403' || $_GET['q'] == 'ms404') {
+    $context->conditions['path']['values']['~' . $_GET['q']] = '~' . $_GET['q'];
+  }
+}

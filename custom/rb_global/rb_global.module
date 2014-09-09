@@ -1,0 +1,78 @@
+<?php
+
+/**
+ * @File
+ *  Implementar funciones varias para el funcionamiento requerido.
+ */
+
+/**
+ * Implements hook_page_alter().
+ */
+function rb_global_page_alter(&$page) {
+  if (user_is_anonymous() && arg(0) == 'user') {
+    if (arg(1) == 'login') {
+      drupal_set_title(t('Intranet Access'));
+    }
+    elseif (arg(1) == 'password') {
+      drupal_set_title(t('Recover Password'));
+    }
+  }
+}
+
+/**
+ * Implements hook_url_inbound_alter().
+ */
+function rb_global_url_inbound_alter(&$path, $original_path, $path_language) {
+  if ($path == 'user' && user_is_anonymous()) {
+    $path = 'user/login';
+  }
+}
+
+/**
+ * Implements hook_url_outbound_alter().
+ */
+function rb_global_url_outbound_alter(&$path, &$options, $original_path) {
+  if ($path == 'user' && user_is_anonymous()) {
+    $path = 'user/login';
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function rb_global_form_alter(&$form, &$form_state, $form_id) {
+  switch ($form_id) {
+    case 'user_login':
+      $form['title'] = array(
+        '#prefix' => '<div class="title-form"><h2>',
+        '#suffix' => '</h2></div>',
+        '#markup' => t('Intranet Access'),
+        '#weight' => -20,
+      );
+      $form['actions']['recover'] = array(
+        '#prefix' => '<div class="recover-password btn btn-link btn-block">',
+        '#suffix' => '</div>',
+        '#markup' => l(t('Recover Password'), 'user/password'),
+      );
+      $form['#attributes']['class'][] = 'rb-proccesed';
+      $form['pass']['#attributes']['placeholder'] = t('Password');
+
+      break;
+
+    case 'user_pass':
+    $form['title'] = array(
+        '#prefix' => '<div class="title-form"><h2>',
+        '#suffix' => '</h2></div>',
+        '#markup' => t('Recover Password'),
+        '#weight' => -20,
+      );
+      $form['actions']['login'] = array(
+        '#prefix' => '<div class="login-link btn btn-link btn-block">',
+        '#suffix' => '</div>',
+        '#markup' => l(t('Log in'), 'user/login'),
+      );
+      $form['#attributes']['class'][] = 'rb-proccesed';
+      $form['name']['#description'] = t('Ingresa cualquiera de las dos opciones, recibiras un correo electrónico');
+      break;
+  }
+}

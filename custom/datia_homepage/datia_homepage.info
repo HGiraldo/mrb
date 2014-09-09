@@ -1,0 +1,4 @@
+name = Datia Hompage
+description = Simple hook_menu to create a homepage.
+core = 7.x
+package = Datia

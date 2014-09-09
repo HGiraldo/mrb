@@ -1,0 +1,7 @@
+name = Custom fields for views
+description = Custom fields for views.
+core = 7.x
+package = RB SAS
+dependencies[] = views
+; Views handlers
+files[] = views/handlers/rb_views_fields_handler_show_lightbox.inc

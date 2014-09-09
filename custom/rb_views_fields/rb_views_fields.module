@@ -1,0 +1,422 @@
+<?php
+
+/**
+ * @file
+ * Archivo Views Api 3
+ */
+
+/**
+ * Implementation of hook_views_api().
+ */
+function quan_views_fields_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'quan_views_fields') . '/views',
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function quan_views_fields_menu() {
+  $items['modal/ajax/by-types/%/%/open'] = array(
+    'page callback'  => 'quan_views_fields_callback',
+    'access arguments' => array('access content'),
+    'page arguments' => array(3, 4),
+  );
+  $items['modal/ajax/by-types/%/%/replace'] = array(
+    'page callback' => 'quan_views_fields_callback_replace',
+    'access arguments' => array('access content'),
+    'page arguments' => array(3, 4),
+    'type' => MENU_CALLBACK,
+    'delivery callback' => 'ajax_deliver',
+    'theme callback' => 'ajax_base_page_theme',
+  );
+  $items['modal/ajax/terms_condition'] = array(
+    'page callback'  => 'quan_views_fields_callback_terms',
+    'access arguments' => array('access content'),
+  );
+  return $items;
+}
+
+/**
+ * Ajax callback for ms_theme_preview_callback
+ *   Terms and condition.
+ */
+function quan_views_fields_callback($type, $id) {
+  // Required includes for ctools to work:
+  ctools_include('modal');
+  ctools_include('ajax');
+  ctools_modal_add_js();
+
+  $to_render = quan_create_content($type, $id);
+  return ctools_modal_render($title, render($to_render));
+}
+
+/**
+ * Ajax callback for quan_views_fields_callback_replace
+ */
+function quan_views_fields_callback_replace($type, $id) {
+  $to_render = quan_create_content($type, $id);
+  $commands = array();
+  $commands[] = ajax_command_html('#wrapper-replace', "Replace:{$type} {$id} HAROLD");
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+/**
+ * Ajax Callback().
+ */
+function quan_views_fields_callback_terms() {
+  // Required includes for ctools to work:
+  ctools_include('modal');
+  ctools_include('ajax');
+  ctools_modal_add_js();
+
+  $to_render = node_view(node_load(32));
+  return ctools_modal_render(NULL, render($to_render));
+}
+
+/**
+ * Implements function to create content.
+ */
+function quan_create_content($type, $id) {
+
+  $cache = cache_get("quan_{$type}_{$id}");
+  if ($cache->data && !empty($cache->data)) {
+    $to_render = $cache->data;
+  }
+  else {
+    switch ($type) {
+      case 'user':
+        try {
+          $user_load = user_load($id);
+          $title = $user_load->name;
+          $content = user_view($user_load, 'full');
+
+          // Consultamos en DB para saber los próximos códigos.
+          $query = new EntityFieldQuery();
+          $query->entityCondition('entity_type', 'user')
+            ->propertyCondition('status', 1)
+            ->propertyCondition('uid', array(3,4,5), 'IN')
+            ->propertyOrderBy('created', 'DESC');
+          $query = $query->execute();
+          // Entramos si tenemos resultados.
+          if (isset($query['user'])) {
+            // Recorremos el Array y sacamos el siguiente y el anterior.
+            $array_users = $query['user'];
+            $array_users = array_values($array_users);
+            $prev = $next = 0;
+            foreach ($array_users as $key => $user) {
+              // Primer Elemento.
+              if ($key == 0 && $user->uid == $id) {
+                $prev = $array_users[count($array_users) - 1]->uid;
+                $next = $array_users[$key + 1]->uid;
+              }
+              // Último Elemento.
+              elseif (($key + 1) == count($array_users) && $user->uid == $id) {
+                $prev = $array_users[$key - 1]->uid;
+                $next = $array_users[0]->uid;
+              }
+              // Verifico en que lugar del array está el elemento $id.
+              elseif ($user->uid == $id) {
+                $prev = $array_users[$key - 1]->uid;
+                $next = $array_users[$key + 1]->uid;
+              }
+            }
+            ctools_include('modal');
+            ctools_modal_add_js();
+            $prev = l('Prev', "modal/ajax/by-types/{$type}/{$prev}/open", array('attributes' => array('class' => array('ctools-use-modal'))));
+            $next = l('Next', "modal/ajax/by-types/{$type}/{$next}/open", array('attributes' => array('class' => array('ctools-use-modal'))));
+            $pager = array(
+              '#prefix' => '<ul class="pager">',
+              '#suffix' => '</ul>',
+              'prev' => array(
+                '#prefix' => '<li class="prev">',
+                '#suffix' => '</li>',
+                '#markup' => $prev,
+              ),
+              'next' => array(
+                '#prefix' => '<li class="next">',
+                '#suffix' => '</li>',
+                '#markup' => $next,
+              ),
+            );
+          }
+          $to_render = array(
+            '#prefix' => '<div id="wrapper-replace">',
+            '#suffix' => '</div>',
+            $content,
+            $pager,
+          );
+          // DEJAMOS EN CACHÉ.
+          cache_set("quan_{$type}_{$id}", $to_render, 'cache', CACHE_PERMANENT);
+        }
+        catch (Exception $e) {
+          $title = $content = 'No Available';
+        }
+        break;
+
+      default:
+        // Por defecto son contenidos de tipo Nodo.
+        try {
+          $node_load = node_load($id);
+          $title = $node_load->title;
+          $content = node_view($node_load, 'full');
+
+          // Consultamos en DB para saber los próximos códigos.
+          $query = new EntityFieldQuery();
+          $query->entityCondition('entity_type', 'node')
+            ->entityCondition('bundle', $type)
+            ->propertyCondition('status', 1)
+            ->propertyOrderBy('created', 'DESC');
+          $query = $query->execute();
+          // Entramos si tenemos resultados.
+          if (isset($query['node'])) {
+            // Recorremos el Array y sacamos el siguiente y el anterior.
+            $array_nodes = $query['node'];
+            $array_nodes = array_values($array_nodes);
+            $prev = $next = 0;
+            foreach ($array_nodes as $key => $node) {
+              // Primer Elemento.
+              if ($key == 0 && $node->nid == $id) {
+                $prev = $array_nodes[count($array_nodes) - 1]->nid;
+                $next = $array_nodes[$key + 1]->nid;
+              }
+              // Último Elemento.
+              elseif (($key + 1) == count($array_nodes) && $node->nid == $id) {
+                $prev = $array_nodes[$key - 1]->nid;
+                $next = $array_nodes[0]->nid;
+              }
+              // Verifico en que lugar del array está el elemento $id.
+              elseif ($node->nid == $id) {
+                $prev = $array_nodes[$key - 1]->nid;
+                $next = $array_nodes[$key + 1]->nid;
+              }
+            }
+            ctools_include('modal');
+            ctools_modal_add_js();
+            $prev = l('Prev', "modal/ajax/by-types/{$type}/{$prev}/open", array('attributes' => array('class' => array('ctools-use-modal'))));
+            $next = l('Next', "modal/ajax/by-types/{$type}/{$next}/open", array('attributes' => array('class' => array('ctools-use-modal'))));
+            $pager = array(
+              '#prefix' => '<ul class="pager">',
+              '#suffix' => '</ul>',
+              'prev' => array(
+                '#prefix' => '<li class="prev">',
+                '#suffix' => '</li>',
+                '#markup' => $prev,
+              ),
+              'next' => array(
+                '#prefix' => '<li class="next">',
+                '#suffix' => '</li>',
+                '#markup' => $next,
+              ),
+            );
+          }
+
+          $to_render = array(
+            '#prefix' => '<div id="wrapper-replace">',
+            '#suffix' => '</div>',
+            $content,
+            $pager,
+          );
+          // DEJAMOS EN CACHÉ.
+          cache_set("quan_{$type}_{$id}", $to_render, 'cache', CACHE_PERMANENT);
+        }
+        catch (Exception $e) {
+          $title = $content = 'No Available';
+        }
+        break;
+    }
+  }
+
+  return $to_render;
+}
+
+
+/**
+ * Implements hook_field_extra_fields().
+ */
+function quan_views_fields_field_extra_fields() {
+  $extra['node']['smt_quan'] = array(
+    'display' => array(
+      'quan_title' => array(
+        'label' => t('Quan Title'),
+        'description' => t('Extra Field'),
+        'weight' => 0,
+      ),
+      'quan_autor' => array(
+        'label' => t('Quan Autor'),
+        'description' => t('Extra Field'),
+        'weight' => 0,
+      ),
+      'be_social' => array(
+        'label' => t('Be Social'),
+        'description' => t('Extra Field'),
+        'weight' => 0,
+      ),
+    )
+  );
+  $extra['node']['partner_post'] = $extra['node']['smt_quan'];
+  return $extra;
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function quan_views_fields_node_view($node, $view_mode, $langcode) {
+  if ($node->type == 'smt_quan' && $view_mode == 'full') {
+    $node->content['quan_title'] = array(
+      '#prefix' => '<div class="field field-name-quan-title field-type-text">',
+      '#suffix' => '</div>',
+      '#markup' => $node->title,
+    );
+    $user = user_load($node->uid);
+    $node->content['quan_autor'] = array(
+      '#prefix' => '<div class="field field-name-quan-autor field-type-text">',
+      '#suffix' => '</div>',
+      '#markup' => $user->name . ' - ' . format_date($node->created, 'custom', 'd M Y', NULL, $langcode),
+    );
+    // Be Social.
+    $node->content['be_social'] = array(
+      '#prefix' => '<div class="be-social">',
+      '#suffix' => '</div>',
+      '#markup' => _social_buttons($node),
+    );
+  }
+
+  if ($node->type == 'partner_post' && $view_mode == 'full') {
+    $node->content['quan_title'] = array(
+      '#prefix' => '<div class="field field-name-quan-title field-type-text">',
+      '#suffix' => '</div>',
+      '#markup' => $node->title,
+    );
+    $partner = field_get_items('node', $node, 'field_partner');
+    $partner = node_load($partner[0]['target_id']);
+
+    $node->content['quan_autor'] = array(
+      '#prefix' => '<div class="field field-name-quan-autor field-type-text">',
+      '#suffix' => '</div>',
+      '#markup' => $partner->title . ' - ' . format_date($node->created, 'custom', 'd M Y', NULL, $langcode),
+    );
+    // Be Social.
+    $node->content['be_social'] = array(
+      '#prefix' => '<div class="be-social">',
+      '#suffix' => '</div>',
+      '#markup' => _social_buttons($node),
+    );
+  }
+}
+
+/**
+ * Implements hook_preprocess_node().
+ */
+function quan_views_fields_preprocess_node(&$vars) {
+  if ($vars['type'] == 'smt_quan' && $vars['view_mode'] == 'full') {
+    $vars['title'] = '';
+  }
+  if ($vars['type'] == 'quan_autor' && $vars['view_mode'] == 'full') {
+    $vars['title'] = '';
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function quan_views_fields_form_alter(&$form, &$form_state, $form_id) {
+  switch ($form_id) {
+    case 'webform_client_form_8':
+      ctools_include('modal');
+      ctools_modal_add_js();
+      // $terms = l('Términos y Condiciones', "modal/ajax/terms_condition", array('attributes' => array('class' => array('ctools-use-modal'))));
+      // $form['#node']->webform['components'][6]['extra']['description'] = $terms;
+      break;
+
+    default:
+      # code...
+      break;
+  }
+}
+
+/**
+ * Implements Social Buttons.
+ */
+function _social_buttons($node) {
+  // Llamamos el JS.
+  _get_js_attached();
+
+  global $base_url;
+
+  $title = $node->title;
+  $url = drupal_get_path_alias('node/' . $node->nid);
+  $all_url = $base_url . base_path() . $url;
+
+  $img_tweet = <<<IMG
+<svg enable-background="new 0 0 56.693 56.693" height="56.693px" id="Layer_1" version="1.1" viewBox="0 0 56.693 56.693" width="56.693px" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <path class="rs" d="M52.837,15.065c-1.811,0.805-3.76,1.348-5.805,1.591c2.088-1.25,3.689-3.23,4.444-5.592c-1.953,1.159-4.115,2-6.418,2.454  c-1.843-1.964-4.47-3.192-7.377-3.192c-5.581,0-10.106,4.525-10.106,10.107c0,0.791,0.089,1.562,0.262,2.303  c-8.4-0.422-15.848-4.445-20.833-10.56c-0.87,1.492-1.368,3.228-1.368,5.082c0,3.506,1.784,6.6,4.496,8.412  c-1.656-0.053-3.215-0.508-4.578-1.265c-0.001,0.042-0.001,0.085-0.001,0.128c0,4.896,3.484,8.98,8.108,9.91  c-0.848,0.23-1.741,0.354-2.663,0.354c-0.652,0-1.285-0.063-1.902-0.182c1.287,4.015,5.019,6.938,9.441,7.019  c-3.459,2.711-7.816,4.327-12.552,4.327c-0.815,0-1.62-0.048-2.411-0.142c4.474,2.869,9.786,4.541,15.493,4.541  c18.591,0,28.756-15.4,28.756-28.756c0-0.438-0.009-0.875-0.028-1.309C49.769,18.873,51.483,17.092,52.837,15.065z" id="twittersvg" style="fill: 00D3A5;">
+  </path>
+</svg>
+IMG;
+
+  $img_fb = <<<IMG
+<svg enable-background="new 0 0 56.693 56.693" height="56.693px" id="Layer_1" version="1.1" viewBox="0 0 56.693 56.693" width="56.693px" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">  <path class="rs" d="M40.43,21.739h-7.645v-5.014c0-1.883,1.248-2.322,2.127-2.322c0.877,0,5.395,0,5.395,0V6.125l-7.43-0.029  c-8.248,0-10.125,6.174-10.125,10.125v5.518h-4.77v8.53h4.77c0,10.947,0,24.137,0,24.137h10.033c0,0,0-13.32,0-24.137h6.77  L40.43,21.739z" id="facebooksvg" style="fill: 00D3A5;">
+  </path>
+</svg>
+IMG;
+
+  $share_tweet = l($img_tweet, "https://twitter.com/intent/tweet",
+    array(
+      'html' => TRUE,
+      'query' => array(
+        'original_referer' => $all_url,
+        'text' => $title,
+        'url' => $all_url,
+        'via' => '_Quan',
+      ),
+      'attributes' => array(
+        'target' => '_blank',
+      ),
+    )
+  );
+
+  $share_fb = l($img_fb, "https://www.facebook.com/sharer/sharer.php",
+    array(
+      'html' => TRUE,
+      'query' => array(
+        'u' => $all_url,
+        'display' => 'popup',
+        'caption' => 'Harold',
+      ),
+      'attributes' => array(
+        'target' => '_blank',
+      ),
+    )
+  );
+
+  return <<<SOCIAL
+<div class="share-wrapper">
+  <div class="share-text">
+    Compartir
+  </div>
+  <div class="logos">
+    <div id="facebook" class="social-b" data-url="{$all_url}" data-text="{$title}" data-title="Like">
+    {$share_fb}
+    </div>
+
+    <div id="twitter" class="social-b" data-url="{$all_url}" data-text="{$title}" data-title="Tweet">
+      {$share_tweet}
+    </div>
+  </div>
+</div>
+SOCIAL;
+}
+
+
+/**
+ * Static Function().
+ */
+function _get_js_attached() {
+  $my_data = &drupal_static(__FUNCTION__);
+  if (!isset($my_data)) {
+    drupal_add_js(drupal_get_path('module', 'quan_views_fields') . '/js/quan_views_fields.js');
+  }
+}

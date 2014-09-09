@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * @file
+ * Se utiliza este archivo para crear una configuración por defecto para la página de inicio.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function datia_homepage_install() {
+  variable_set('site_frontpage', 'datia_homepage');
+  variable_set('site_403', 'ms403');
+  variable_set('site_404', 'ms404');
+}

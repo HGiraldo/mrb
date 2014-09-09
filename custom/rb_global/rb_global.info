@@ -1,0 +1,4 @@
+name = Custom Module for RB
+description = Custom functions.
+core = 7.x
+package = RB SAS
