@@ -5,6 +5,270 @@
  *  Implementar funciones varias para el funcionamiento requerido.
  */
 
+define('PATH_DOWNLOAD_DIRECTORY_FILE', 'descargables/Directorio.pdf');
+define('ROLE_RECUSRSOS_HUMANOS', 'human resources');
+
+/**
+ * Implements hook_menu().
+ */
+function rb_global_menu() {
+  $items['album/%/%/%'] = array(
+    'title' => '',
+    'page callback' => 'rb_global_show_album_image',
+    'page arguments' => array(1, 2, 3),
+    'access arguments' => array('access content'),
+  );
+
+  $items['directorio/rb'] = array(
+    'title' => 'Directorio',
+    'page callback' => 'rb_global_directory',
+    'access arguments' => array('access content'),
+  );
+
+  $items['post/ajax/verifuser'] = array(
+    'title' => 'Virify',
+    'page callback' => 'rb_global_verifuser',
+    'access arguments' => array('access content'),
+  );
+  return $items;
+}
+
+/**
+ * Page Callback.
+ */
+function rb_global_verifuser() {
+  if (!user_is_anonymous()) {
+    global $user;
+    $uid = $user->uid;
+    $user = user_load($user->uid);
+    $user_view = user_view($user);
+    $image = $user_view['user_picture']['#markup'];
+    $name = $user->name;
+    $render = array(
+      '#prefix' => '<div class="user-profile-options">',
+      '#suffix' => '</div>',
+      'image' => array(
+        '#prefix' => '<div class="user-image">',
+        '#suffix' => '</div>',
+        '#markup' => l($image, "user/{$uid}", array('html' => TRUE)),
+      ),
+      '2' => array(
+        '#prefix' => '<div class="user-actions">',
+        '#suffix' => '</div>',
+        'name' => array(
+          '#prefix' => '<div class="user-name">',
+          '#suffix' => '</div>',
+          '#markup' => l($user->name, "user/{$uid}", array('html' => TRUE)),
+        ),
+        'session' => array(
+          '#prefix' => '<div class="user-session">',
+          '#suffix' => '</div>',
+          '#markup' => l(t('Cerrar sesión'), "user/logout", array('attributes' => array('class' => array('user-logged-out')))),
+        ),
+      ),
+    );
+  }
+  else {
+    $render = array(
+      '#prefix' => '<div class="user-profile-options">',
+      '#suffix' => '</div>',
+      'login' => array(
+        '#prefix' => '<div class="user-login">',
+        '#suffix' => '</div>',
+        '#markup' => l(t('Iniciar sesión'), "user/login", array('attributes' => array('style' => 'padding: 2% 4% 2% 0;float: right;', 'class' => array('user-logged-in')))),
+      ),
+    );
+  }
+  drupal_json_output(render($render));
+}
+
+/**
+ * Implements Callback for rb_global_directory
+ */
+function rb_global_directory() {
+  // Breadcrumb.
+  $breadcrumb = array(
+    l('Home', ''),
+    'Quienes-somos'
+  );
+  drupal_set_breadcrumb($breadcrumb);
+
+  // Tabla.
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'ficha_cargo')
+    ->propertyCondition('status', 1)
+    ->execute();
+
+  $url_d = file_create_url('public://' . PATH_DOWNLOAD_DIRECTORY_FILE);
+  $result = $query->execute();
+  $rows[0] = array(
+    '#prefix' => '<div id="rb-directory">',
+    '#suffix' => '</div>',
+  );
+  $rows[0]['download'] = array(
+    '#prefix' => '<div class="download-wrapper">',
+    '#suffix' => '</div>',
+    '#markup' => l(t('Descargue aquí el directorio en pdf'), url($url_d), array('attributes' => array('download' => 'Directorio', 'class' => array('rb-download-link')))),
+  );
+  $rows[0]['input'] = array(
+    '#prefix' => '<div class="actions">',
+    '#suffix' => '</div>',
+    '#markup' => '<input class="search" placeholder="Ingresa una palabra clave de búsqueda" />'
+  );
+  $rows[0]['header'] = array(
+    '#prefix' => '<div class="list-header">',
+    '#suffix' => '</div>',
+    'name' => array(
+      '#prefix' => '<div class="header-item h-name"><button class="sort btn-link btn-block" data-sort="name">',
+      '#suffix' => '</button></div>',
+      '#markup' => t('Name'),
+    ),
+    'cargo' => array(
+      '#prefix' => '<div class="header-item h-cargo"><button class="sort btn-link btn-block" data-sort="cargo">',
+      '#suffix' => '</button></div>',
+      '#markup' => t('Cargo'),
+    ),
+    'ext' => array(
+      '#prefix' => '<div class="header-item h-ext"><button class="sort btn-link btn-block" data-sort="ext">',
+      '#suffix' => '</button></div>',
+      '#markup' => t('Ext'),
+    ),
+    'mail' => array(
+      '#prefix' => '<div class="header-item h-mail"><button class="sort btn-link btn-block" data-sort="mail">',
+      '#suffix' => '</button></div>',
+      '#markup' => t('E-Mail'),
+    ),
+  );
+  $rows[0]['data'] = array(
+    '#prefix' => '<div class="data"><ul class="list">',
+    '#suffix' => '</ul></div>',
+  );
+  if (isset($result['node'])) {
+    $result = reset($result);
+    $count = 0;
+    foreach ($result as $key => $value) {
+      $node = node_load($value->nid);
+      $nodew = entity_metadata_wrapper('node', $node);
+      // Cargo.
+      $cargo = $node->title;
+      // Extensiones.
+      if (isset($node->field_info)) {
+        foreach ($nodew->field_info->value() as $keyI => $valueI) {
+          $dpto = $ext = $name = $mail = 'N/A';
+          list($dpto,$ext,$name,$mail) = explode(";", $valueI);
+          $class = 'odd';
+          if ($count % 2 == 0) {
+            $class = 'even';
+          }
+          $rows[0]['data'][] = array(
+            '#prefix' => '<li class="item-ficha ' . $class . '">',
+            '#suffix' => '</li>',
+            'name' => array(
+              '#prefix' => '<div class="name">',
+              '#suffix' => '</div>',
+              '#markup' => $name,
+            ),
+            'cargo' => array(
+              '#prefix' => '<div class="cargo">',
+              '#suffix' => '</div>',
+              '#markup' => $cargo,
+            ),
+            'ext' => array(
+              '#prefix' => '<div class="ext">',
+              '#suffix' => '</div>',
+              '#markup' => $ext,
+            ),
+            'mail' => array(
+              '#prefix' => '<div class="mail">',
+              '#suffix' => '</div>',
+              '#markup' => $mail,
+            ),
+          );
+          $count++;
+        }
+      }
+    }
+  }
+  // ADD JS LIST.
+  $rows['#attached']['js'][] = 'http://listjs.com/no-cdn/list.js';
+  return $rows;
+}
+
+function get_alt_text(&$value, $nid) {
+  $query = db_select('field_data_field_images', 'img')
+            ->fields('img', array('field_images_alt', 'field_images_title'))
+            ->condition('field_images_fid', $value['fid'], '=')
+            ->condition('entity_id', $nid, '=')
+            ->execute()
+            ->fetchAll();
+  if (isset($query) && is_array($query) && !empty($query)) {
+    $query = reset($query);
+    $value['alt'] = $query->field_images_alt;
+    $value['title'] = $query->field_images_title;
+  }
+}
+
+/**
+ * Implements Callback for rb_global_show_album_image;
+ */
+function rb_global_show_album_image($title, $nid, $fid) {
+  // Page Title.
+  drupal_set_title($title);
+  // Node
+  $wrapper = entity_metadata_wrapper('node', node_load($nid));
+  // Breadcrumb.
+  $breadcrumb = array(
+    l('Home', ''),
+    'Noticias',
+    l('Sociales', 'sociales'),
+    l($wrapper->title->value(), 'node/' . $wrapper->nid->value()),
+  );
+  drupal_set_breadcrumb($breadcrumb);
+  // Get Alt Text
+  $value = (array) file_load($fid);
+  $alt_text = get_alt_text($value, $nid);
+
+  // Title Image.
+  $title_image = $title;
+  if (isset($value['title']) && !empty($value['title']) && strlen($value['title']) > 0) {
+    $title_image = $value['title'];
+  }
+
+  $vars = array(
+    'path' => $value['uri'],
+    'style_name' => '680x380',
+    'alt' => $value['alt'],
+    'title' => $value['title'],
+  );
+  $image = theme('image_style', $vars);
+  $url = array(
+    '#prefix' => '<div class="download-image">',
+    '#suffix' => '</div>',
+    '#markup' => l(t('Download'), file_create_url($value['uri']), array('attributes' => array('download' => $title_image))),
+  );
+  $render[] = array(
+    '#prefix' => '<div class="album-full-image">',
+    '#suffix' => '</div>',
+    '#markup' => $image . render($url),
+  );
+  $render[] = array(
+    '#prefix' => '<div class="paginator-title">',
+    '#suffix' => '</div>',
+    'title' => array(
+      '#prefix' => '<div class="title"><h2>',
+      '#suffix' => '</h2></div>',
+      '#markup' => $title_image,
+    ),
+    'pag' => array(
+      '#prefix' => '<div class="paginator">',
+      '#suffix' => '</div>',
+      // '#markup' => $value['title'],
+    ),
+  );
+  return render($render);
+}
+
 /**
  * Implements hook_page_alter().
  */
@@ -56,7 +320,7 @@ function rb_global_form_alter(&$form, &$form_state, $form_id) {
       );
       $form['#attributes']['class'][] = 'rb-proccesed';
       $form['pass']['#attributes']['placeholder'] = t('Password');
-
+      $form['#submit'][] = 'rb_global_form_alter_custom_submit';
       break;
 
     case 'user_pass':
@@ -75,4 +339,122 @@ function rb_global_form_alter(&$form, &$form_state, $form_id) {
       $form['name']['#description'] = t('Ingresa cualquiera de las dos opciones, recibiras un correo electrónico');
       break;
   }
+}
+
+/**
+ * Implements custom submit (Go Home)
+ */
+function rb_global_form_alter_custom_submit($form, &$form_state) {
+  $form_state['redirect'] = '<front>';
+}
+/**
+ * Implements hook_field_extra_fields().
+ */
+function rb_global_field_extra_fields() {
+  $extra['node']['gallery'] = array(
+    'display' => array(
+      'images_thumbnails' => array(
+        'label' => t('Images Thumbnails'),
+        'description' => t('RB Global Module'),
+      ),
+    )
+  );
+  return $extra;
+}
+
+
+/**
+ * Implements hook_node_view_alter().
+ */
+function rb_global_node_view_alter(&$build) {
+  // Para mostrar una galería de imágenes de forma diferecte con links a la interna de la imagen.
+  if ($build['#bundle'] == 'gallery' && $build['#view_mode'] == 'full') {
+    $node = $build['#node'];
+    if (isset($node->field_images)) {
+      $render = array(
+        '#prefix' => '<div class="album-tumbnails">',
+        '#suffix' => '</div>',
+      );
+      $wrapper = entity_metadata_wrapper('node', $node);
+      $images = $wrapper->field_images->value();
+      if (is_array($images)) {
+        foreach ($images as $key => $value) {
+          $vars = array(
+            'path' => $value['uri'],
+            'style_name' => '214x160',
+            'alt' => $value['alt'],
+            'title' => $value['title'],
+          );
+          $image = theme('image_style', $vars);
+          $title = $wrapper->title->value();
+          $nid = $wrapper->nid->value();
+          $fid = $value['fid'];
+          $render[] = array(
+            '#prefix' => '<div class="tumbnail-item">',
+            '#suffix' => '</div>',
+            '#markup' => l($image, "album/{$title}/{$nid}/{$fid}", array('html' => TRUE)),
+          );
+        }
+        $build['images_thumbnails'] = $render;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_node_presave().
+ */
+function rb_global_node_presave($node) {
+  global $user;
+  if ($user->uid != 1 && in_array(ROLE_RECUSRSOS_HUMANOS, array_values($user->roles))) {
+    // Despublicamos el contenido.
+    $node->status = FALSE;
+    // Alertamos al usuario dueño del contenido.
+    drupal_set_message('Este contenido está temporalmente despublicado, a espera de revisión por parte del Administrador RB.', 'warning');
+    // SEND MAIL.
+    $body = 'El contenido "' . $node->title . '" creado por el usuario "' . $user->name . '", necesita validación por parte del usuario Administrador, es necesario darle en la opción de publicar para que este contenido sea visible en la intranet.';
+    $user_to = user_load(1);
+    rb_global_mail_send(array(
+      'key' => 'Validar contenido Creado: ' . $node->title,
+      'to' => $user_to->mail,
+      'body' => $body,
+    ));
+  }
+}
+
+/**
+ * Implements callback to send_email.
+ */
+function rb_global_mail_send($params) {
+  $language = language_default();
+  global $base_url;
+  $args = array();
+  // General.
+  $args['module'] = 'rb_global';
+  // Arguments.
+  $args['key'] = $params['key'];
+  $args['from'] = isset($params['from']) ? $params['from'] : variable_get('site_mail', '');
+  $args['to'] = $params['to'];
+  $args['body'] = $params['body'];
+  $message = drupal_mail($args['module'], $args['key'], $args['to'], $language, $args, $args['from'], TRUE);
+}
+
+/**
+ * Implements hook_mail().
+ */
+function rb_global_mail($key, &$message, $args) {
+  extract($args);
+  // Create a Email Subject and Body.
+  $message['subject'] = $key;
+  $message['body'] = array();
+  $message['body'][] = $args['body'];
+}
+
+/**
+ * Implements hook_mail_alter().
+ */
+function rb_global_mail_alter(&$message) {
+  // Add Headers to allow HTML.
+  $message['headers']['MIME-Version'] = '1.0';
+  $message['headers']['Content-Type'] = 'text/html; charset=UTF-8';
 }
